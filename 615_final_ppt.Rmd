@@ -1,0 +1,255 @@
+---
+title: "Ppt_615"
+author: "Qixuan Zhang"
+date: "12/17/2018"
+output: html_document
+---
+
+```{r,include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,echo=FALSE}
+library(webshot)
+library(ggplot2)
+library(DT)
+library(gridExtra)
+library(tidytext)
+library(tidyverse)
+library(tm)
+library(scales)
+library(broom)
+library(ggthemes)
+library(broom)
+library(tibble)
+library(sentimentr)
+library(stringr)
+library(readr)
+library(dplyr)
+library(wordcloud)
+library(RColorBrewer)
+library(pROC)
+library(tidyr)
+library(MASS)
+library(knitr)
+library(arm)
+library(rgdal)
+library(car)
+library(lmtest)
+library(leaflet)
+library(benford.analysis)
+library(magrittr)
+library(data.table)
+```
+
+```{r,echo=FALSE}
+###Load Raw Dataset
+Bos_listing<-read.csv("Boston_listings.csv")
+#View(Bos_listing)
+Boston_review<-read.csv("Boston_review.csv",stringsAsFactors = FALSE)
+###Cleaning Dataset
+Boston_listing1<-Bos_listing[,-c(2,3,4,5,6,7,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,30,31,32,33,35,36,37,38,39,41,42,43,44,45,46,47,48,51,58,59,60,62,63,64,66,67,68,69,70,72,73,74,75,76,78,79,86,87,88,89,90,91,92,93,94,95,96)]
+#Delete NA of Boston_listing dataset,filter the price and number of reviews
+Boston_listing11<-na.omit(Boston_listing1,cols="review_scores_rating")
+Boston_listing111<-na.omit(Boston_listing11,cols="price")
+Boston_listing1111<-na.omit(Boston_listing111,cols="review_scores_accuracy")
+Boston_listing11111<-Boston_listing111%>% filter(number_of_reviews>=3)
+Boston_listing<-Boston_listing11111%>%filter(price<=1000)
+```
+
+```{r,echo=FALSE}
+pal <- colorQuantile(
+  palette = "BuGn",
+  domain = Boston_listing$review_scores_rating
+)
+leaflet(Boston_listing) %>% addTiles() %>%
+  addCircles(lng = ~longitude, lat = ~latitude, weight = 1,
+    popup = ~price, radius = 50, 
+    color = ~pal(review_scores_rating), fillOpacity = 1)
+```
+
+```{r,echo=FALSE}
+b1<-Boston_listing %>% group_by(review_scores_rating)%>%
+  summarise(count=n())
+ggplot(b1,aes(x=reorder(review_scores_rating,-count),y=count))+geom_histogram(binwidth = 0.09,stat="identity",fill="light green")+labs(title="Figure3.1 Revies Rate Distribution of Boston",x="Review Scores Rating",y="Counts")+theme_minimal()
+
+```
+
+```{r,echo=FALSE}
+room_type<-Boston_listing %>% filter(review_scores_rating>=69)%>% group_by(review_scores_rating,room_type)%>%
+  summarise(count=n())
+
+pro_type<-Boston_listing %>% filter(review_scores_rating>=70)%>% group_by(review_scores_rating,property_type)%>%
+  summarise(count=n())
+
+n<-Boston_listing%>% filter(review_scores_location>=7)%>%
+  group_by(neighbourhood_cleansed,review_scores_location)%>%
+  summarise(count=n())
+
+ggplot(n,aes(x=review_scores_location,y=count,fill=neighbourhood_cleansed))+geom_bar(width=0.9,stat="identity")+labs(title = "Figure 3.2 Review Scores Location Of Different Neighbourhood",x="Review Scores Location",y="count")+theme_minimal()
+```
+
+```{r,echo=FALSE}
+ggplot(room_type,aes(x=review_scores_rating,y=count,fill=room_type))+geom_bar(width=0.9,stat="identity")+labs(title="Figure 3.3 Review Scores Rating of Different Room Type",x="Review Scores Rating",y="count")+theme_minimal()
+```
+
+```{r,echo=FALSE}
+ggplot(Boston_listing, aes(y=review_scores_rating,x=price)) + geom_point(color="green")+
+ theme_minimal()+labs(title = "Figure 3.4_1 Price Distribution in Different")
+```
+
+```{r,echo=FALSE}
+ggplot(pro_type,aes(x=review_scores_rating,y=count,fill=property_type))+geom_bar(width=0.9,stat="identity")+labs(title="Figure 3.4 Review Scores Rating of Different Property Type",x="Review Scores Rating",y="count")+theme_minimal()
+```
+
+```{r,echo=FALSE}
+ggplot(Boston_listing,aes(x=neighbourhood_cleansed,y=review_scores_rating,fill=room_type))+geom_bar(width = 0.9,stat="identity")+theme(axis.text.x = element_text(angle=45,vjust = 0.75,size = 10))+
+  labs(title = "Figure 3.5 Evaluation of Different Room Type in Different Neighbourhood")
+```
+
+```{r,echo=FALSE}
+b22<-Boston_listing %>% filter(review_scores_rating>=90)
+b2<- b22%>% group_by(review_scores_rating)%>%
+  summarise(count=n())
+b23<-Boston_listing%>% filter(review_scores_rating<75)
+b3<-b23%>% group_by(review_scores_rating)%>%
+  summarise(count=n())%>% top_n(n=11,wt=count)
+#View(b3)
+b75<-ggplot(b3,aes(x=reorder(review_scores_rating,-count),y=count))+geom_histogram(binwidth=0.09,stat="identity",fill="green")+labs(tittle="Figure 3.6 TOP 11 Worse Review Scores Rating in Boston",x="Review Scores Rating",y="Count")+theme_minimal()
+
+b90<-ggplot(b2,aes(x=reorder(review_scores_rating,-count),y=count))+geom_histogram(binwidth=0.09,stat="identity",fill="#FFCCFF")+labs(title="Figure 3.6 TOP 11 Best&Worse Reviews Scores Rating in Boston",x="Review Scores Rating",y="Count")+theme_minimal()
+grid.arrange(b90,b75)
+```
+
+```{r,echo=FALSE}
+listing_lowrate<-Boston_listing%>%filter(review_scores_rating<=75)
+listing_highrate<-Boston_listing%>%filter(review_scores_rating>=90)
+# Initially, we want to see the description combined with review scores
+listing_low<-dplyr::select(listing_lowrate,id, description,price,property_type,room_type, review_scores_accuracy,review_scores_rating,review_scores_location,review_scores_communication)
+listing_low$description<-as.character(listing_low$description)
+#is.character(listing_low$description)
+listing_high<-dplyr::select(listing_highrate,id, description,price,property_type,room_type, review_scores_accuracy,review_scores_rating,review_scores_location,review_scores_communication)
+listing_high$description<-as.character(listing_high$description)
+listing_word<-listing_low%>%
+unnest_tokens(word,description)%>%
+  filter(!word%in%stop_words$word,str_detect(word, "^[a-z']+$"))
+
+listing_word1<-listing_high%>%
+unnest_tokens(word,description)%>%
+  filter(!word%in%stop_words$word,str_detect(word, "^[a-z']+$"))
+ 
+#plot the graph
+common_listings <- listing_word %>%
+  group_by(word) %>%
+  summarise(count = n()) %>%
+  top_n(n = 30, wt = count) %>%
+  ggplot() +
+  geom_bar(mapping = aes(x=reorder(word, count),
+                         y=count),
+           stat="identity", fill = "light green") +
+  labs(title="Figure 3.7 Top 30 words described in listings of low rating",
+       y="Word count", x="Most common Words") +
+  coord_flip() +
+  theme_minimal()
+print(common_listings)
+```
+
+```{r,echo=FALSE}
+common_listings1<- listing_word1%>%
+  group_by(word) %>%
+  summarise(count = n()) %>%
+  top_n(n = 30, wt = count) %>%
+  ggplot() +
+  geom_bar(mapping = aes(x=reorder(word, count),
+                         y=count),
+           stat="identity", fill = "pink") +
+  labs(title="Figure 3.8 Top 30 words described in listings of high review scores rating",
+       y="Word count", x="Most common Words") +
+  coord_flip() +
+  theme_minimal()
+print(common_listings1)
+```
+
+```{r,echo=FALSE}
+low<-left_join(listing_low,Boston_review,by="id")
+low$comments<-as.character(low$comments)
+review_words_low<-low%>%
+  unnest_tokens(word,comments)%>%
+  filter(!word%in%stop_words$word,
+         str_detect(word,"^[a-z']+$"))
+
+cloud_low<-as.data.frame(review_words_low%>%
+                           group_by(word)%>%
+                           summarize(no_rows=length(word)))
+wordcloud(words = cloud_low$word, freq = cloud_low$no_rows, min.freq =3,
+          max.words=120, random.order=FALSE, random.color=FALSE, rot.per=0.33, 
+          colors=brewer.pal(1, "Dark2"))
+```
+
+```{r,echo=FALSE}
+high<-left_join(listing_high,Boston_review,by="id")
+high$comments<-as.character(high$comments)
+review_words_high<-high%>%
+  unnest_tokens(word,comments)%>%
+  filter(!word%in%stop_words$word,
+         str_detect(word,"^[a-z']+$"))
+cloud_high<-as.data.frame(review_words_high%>%
+                            group_by(word)%>%
+                            summarise(no_rows=length(word)))
+wordcloud(words = cloud_high$word, freq = cloud_high$no_rows, min.freq = 5,
+          max.words=120, random.order=FALSE, random.color=FALSE, rot.per=0.4, 
+          colors=brewer.pal(1, "Dark2"))
+```
+
+```{r,echo=FALSE}
+review_words <- Boston_review%>%
+  unnest_tokens(word, comments) %>%
+  filter(!word %in% stop_words$word,str_detect(word, "^[a-z']+$"))
+#review_words_s <- low %>%
+  #unnest_tokens(word, comments) %>%
+  #filter(!word %in% stop_words$word,str_detect(word, "^[a-z']+$"))
+
+AFINN <- sentiments %>%
+  filter(lexicon == "AFINN") 
+
+afinn<-dplyr::select(AFINN,word,score)
+
+reviews_sentiment <- review_words %>%
+  inner_join(afinn, by = "word") %>%group_by(id)%>%
+summarize(sentiment = mean(score))
+
+
+reviews_sentiment<-data.frame(reviews_sentiment,stringsAsFactors = FALSE)
+#Join dataset
+
+reviews_sentiment1<-inner_join(reviews_sentiment,listing_low,by="id")
+
+#View(reviews_sentiment3)
+reviews_sentiment3 <-inner_join(reviews_sentiment,Boston_listing,by="id")
+reviews_sentiment2<-inner_join(reviews_sentiment,listing_high,by="id")
+
+ggplot(reviews_sentiment2, aes(x=sentiment))+
+  geom_histogram(binwidth = 0.09, aes(fill = room_type))+
+  labs(title="Figure 3.12Distribution of Sentiment Score Of Comments For Different Room Type",
+       x="Mean AFFIN Score", y="Count") +
+  theme_minimal()
+```
+
+```{r,echo=FALSE}
+ggplot(reviews_sentiment2, aes(x=sentiment))+
+  geom_histogram(binwidth = 0.09, aes(fill = property_type))+
+  labs(title="Figure3.13Distribution of Sentiment Of Comments in Property",
+       x="Mean AFFIN Score", y="Count") +
+  theme_minimal()
+```
+
+```{r,echo=FALSE}
+ben_review <- benford(Boston_listing$review_scores_rating, number.of.digits = 2)
+plot(ben_review)
+ben_clean<-benford(Boston_listing$review_scores_cleanliness,number.of.digits = 2)
+plot(ben_clean)
+ben_price<-benford(Boston_listing$price,number.of.digits = 2)
+plot(ben_price)
+```
+
+
